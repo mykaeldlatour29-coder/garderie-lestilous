@@ -702,7 +702,23 @@ async function ouvrirChatResp(parentId){
       if(newCount!==lastChatCount_resp){
         lastChatCount_resp=newCount;
         chats[String(parentId)]=fresh;
-        renderChatFil('chat-fil-resp',fresh,'responsable');
+        // Ajouter seulement les nouveaux messages sans reset
+        const fil=document.getElementById('chat-fil-resp');
+        if(fil&&fil.children.length>0){
+          const msgs=fresh.messages||[];
+          const rendered=chatRendered['chat-fil-resp']||0;
+          if(msgs.length>rendered){
+            msgs.slice(rendered).forEach(m=>{
+              const div=document.createElement('div');
+              div.innerHTML=msgHTML(m,'responsable');
+              fil.appendChild(div.firstChild);
+            });
+            chatRendered['chat-fil-resp']=msgs.length;
+            fil.scrollTop=fil.scrollHeight;
+          }
+        } else {
+          renderChatFil('chat-fil-resp',fresh,'responsable');
+        }
         renderConversationsListe();
       }
     }
@@ -773,12 +789,30 @@ async function ouvrirVueParentConnecte(compte,enfantIdActif){
     if(freshChat){
       const newCount=(freshChat.messages||[]).length;
       const changed=newCount!==lastChatCount_parent;
-      if(changed){lastChatCount_parent=newCount;chats[String(compte.id)]=freshChat;}
+      if(changed){
+        lastChatCount_parent=newCount;
+        chats[String(compte.id)]=freshChat;
+        // Ajouter seulement les nouveaux messages sans reset
+        const fil=document.getElementById('vpc-chat-fil');
+        if(fil&&fil.children.length>0){
+          const msgs=freshChat.messages||[];
+          const rendered=chatRendered['vpc-chat-fil']||0;
+          if(msgs.length>rendered){
+            msgs.slice(rendered).forEach(m=>{
+              const div=document.createElement('div');
+              div.innerHTML=msgHTML(m,'parent');
+              fil.appendChild(div.firstChild);
+            });
+            chatRendered['vpc-chat-fil']=msgs.length;
+            fil.scrollTop=fil.scrollHeight;
+          }
+        }
+      }
       const tabActif=document.querySelector('.active-vpc-tab');
       if(tabActif){const onclick=tabActif.getAttribute('onclick')||'';
-        if(onclick.includes('messages')&&changed)renderChatParent();
         if(onclick.includes('photos'))renderVPCPhotos();
         if(onclick.includes('factures'))renderVPCFactures();
+        if(onclick.includes('messages')&&changed)renderAnnonces();
       }
     }
   },5000);
