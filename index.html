@@ -786,5 +786,524 @@ async function confirmerAjoutEnfantParent(){const code=document.getElementById('
   const todStr=todayStr();const evDateEl=document.getElementById('ev-date');if(evDateEl)evDateEl.value=todStr;
 })();
 </script>
+
+
+
+<!-- FACTURES -->
+<div id="page-factures" class="page">
+  <div class="header">
+    <div class="header-left"><h2>💳 Factures</h2><p>Gestion financière</p></div>
+    <div class="header-actions">
+      <button class="btn btn-outline" onclick="showToast('📄 Exporté!')">📄 Exporter</button>
+      <button class="btn btn-primary" onclick="resetModalFacture();openModal('modal-facture')">+ Nouvelle facture</button>
+    </div>
+  </div>
+  <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="stat-card"><div class="stat-value" id="f-stat-payees" style="color:var(--sage)">0</div><div class="stat-label">Payées</div></div>
+    <div class="stat-card"><div class="stat-value" id="f-stat-attente" style="color:var(--terracotta)">0</div><div class="stat-label">En attente</div></div>
+    <div class="stat-card"><div class="stat-value" id="f-stat-retard" style="color:#C00">0</div><div class="stat-label">En retard</div></div>
+    <div class="stat-card"><div class="stat-value" id="f-stat-total">0 $</div><div class="stat-label">Total à recevoir</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Toutes les factures</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="filtrerFactures('tous')">Toutes</button>
+        <button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="filtrerFactures('attente')">En attente</button>
+        <button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="filtrerFactures('retard')">En retard</button>
+        <button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="filtrerFactures('payee')">Payées</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--warm)">
+          <th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Famille</th>
+          <th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Description</th>
+          <th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Montant</th>
+          <th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Échéance</th>
+          <th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Statut</th>
+          <th style="padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase">Actions</th>
+        </tr></thead>
+        <tbody id="factures-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- AGENDA -->
+<div id="page-agenda" class="page">
+  <div class="header">
+    <div class="header-left"><h2>📅 Agenda</h2><p id="agenda-mois-titre"></p></div>
+    <div class="header-actions">
+      <button class="btn btn-outline" onclick="naviguerMois(-1)">‹ Précédent</button>
+      <button class="btn btn-outline" onclick="naviguerMois(1)">Suivant ›</button>
+      <button class="btn btn-primary" onclick="openModal('modal-evenement')">+ Événement</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 300px;gap:20px">
+    <div class="card">
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px">
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Lun</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Mar</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Mer</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Jeu</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Ven</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Sam</div>
+          <div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-light);padding:4px">Dim</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><div class="card-title" id="cal-selected-titre">Aujourd'hui</div></div>
+        <div class="card-body" id="cal-events-today"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Prochains événements</div></div>
+        <div class="card-body" id="cal-events-upcoming"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MENU -->
+<div id="page-menu" class="page">
+  <div class="header">
+    <div class="header-left"><h2>🍽️ Menu</h2><p id="menu-semaine-titre"></p></div>
+    <div class="header-actions">
+      <button class="btn btn-outline" onclick="naviguerSemaine(-1)">‹ Semaine préc.</button>
+      <button class="btn btn-outline" onclick="naviguerSemaine(1)">Semaine suiv. ›</button>
+      <button class="btn btn-primary" onclick="ouvrirModifMenu()">✏️ Modifier</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse" id="menu-table"></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title" id="menu-detail-titre">Détail du jour</div></div>
+    <div class="card-body" id="menu-detail-body"><p style="color:var(--text-light);font-size:13px">Cliquez sur un jour.</p></div>
+  </div>
+</div>
+
+</main>
+
+<!-- VUE PARENT CONNECTÉ -->
+<div id="vue-parent-connecte" style="display:none;min-height:100vh;background:var(--cream)">
+  <nav style="background:var(--brown);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:60px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🐺</span>
+      <span style="font-family:'Fraunces',serif;font-size:18px;color:var(--cream);font-weight:500">Les Ti-lous</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <span id="vpc-nom-parent" style="font-size:13px;color:var(--peach)"></span>
+      <button onclick="deconnecter()" style="padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.15);color:white;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px">Déconnexion</button>
+    </div>
+  </nav>
+  <div style="max-width:800px;margin:0 auto;padding:32px 20px">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body" style="display:flex;align-items:center;gap:20px">
+        <div id="vpc-avatar" style="width:64px;height:64px;border-radius:18px;background:var(--sage-light);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden"></div>
+        <div style="flex:1">
+          <div id="vpc-enfant-switcher"></div>
+          <div id="vpc-enfant-nom" style="font-family:'Fraunces',serif;font-size:22px;font-weight:500"></div>
+          <div id="vpc-enfant-info" style="font-size:13px;color:var(--text-light);margin-top:2px"></div>
+          <span class="badge badge-present" style="margin-top:6px;display:inline-block">✓ Présent(e) aujourd'hui</span>
+          <button onclick="ouvrirModalAjoutEnfant()" style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;background:var(--warm);border:1.5px solid var(--peach);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;color:var(--brown)">+ Ajouter un enfant</button>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text-light)">Arrivée</div>
+          <div style="font-size:20px;font-weight:600;color:var(--text)" id="vpc-arrivee">7h45</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+      <button onclick="showVPCtab('vpc-tab-factures', this)" class="vpc-tab-btn active-vpc-tab">💳 Factures</button>
+      <button onclick="showVPCtab('vpc-tab-messages', this)" class="vpc-tab-btn">💬 Messages</button>
+      <button onclick="showVPCtab('vpc-tab-agenda', this)" class="vpc-tab-btn">📅 Agenda</button>
+      <button onclick="showVPCtab('vpc-tab-menu', this)" class="vpc-tab-btn">🍽️ Menu</button>
+      <button onclick="showVPCtab('vpc-tab-photos', this)" class="vpc-tab-btn">📸 Photos</button>
+      <button onclick="ouvrirAbsenceParent()" style="padding:9px 18px;border-radius:10px;border:none;background:var(--rose-light);color:#8A2A2A;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;margin-left:auto">🤒 Signaler une absence</button>
+    </div>
+    <div id="vpc-tab-factures">
+      <div class="card"><div class="card-header"><div class="card-title">Mes factures</div></div><div class="card-body" id="vpc-factures-liste"></div></div>
+    </div>
+    <div id="vpc-tab-messages" style="display:none">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header" style="cursor:pointer" onclick="toggleAnnonces()">
+          <div><div class="card-title">📢 Annonces générales</div><div class="card-subtitle" id="vpc-annonces-subtitle">Messages à tous les parents</div></div>
+          <span id="vpc-annonces-toggle" style="font-size:18px;color:var(--text-light)">▾</span>
+        </div>
+        <div id="vpc-annonces-body" class="card-body"><div id="vpc-annonces-liste"></div></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;height:460px">
+        <div class="card-header" style="flex-shrink:0">
+          <div class="card-title">💬 Chat privé avec la responsable</div>
+          <div class="card-subtitle">Vos échanges sont privés</div>
+        </div>
+        <div id="vpc-chat-fil" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--cream)"></div>
+        <div style="flex-shrink:0;padding:12px 16px;border-top:1px solid var(--warm);display:flex;gap:10px;align-items:flex-end;background:white">
+          <textarea id="vpc-chat-input" placeholder="Écrire un message…" style="flex:1;border:1.5px solid var(--peach);border-radius:12px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;resize:none;outline:none;min-height:42px;max-height:100px;line-height:1.5;color:var(--text)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();envoyerChatParent()}"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+          <button onclick="envoyerChatParent()" style="padding:10px 18px;border-radius:12px;background:var(--brown);color:white;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;flex-shrink:0">Envoyer</button>
+        </div>
+      </div>
+    </div>
+    <div id="vpc-tab-agenda" style="display:none">
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+          <div class="card-title">📅 Agenda</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="vpcAgendaNav(-1)" style="padding:4px 10px;border-radius:8px;border:1.5px solid var(--peach);background:white;cursor:pointer;font-size:14px">‹</button>
+            <span id="vpc-agenda-titre" style="font-size:13px;font-weight:600;min-width:120px;text-align:center"></span>
+            <button onclick="vpcAgendaNav(1)" style="padding:4px 10px;border-radius:8px;border:1.5px solid var(--peach);background:white;cursor:pointer;font-size:14px">›</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div id="vpc-calendrier" style="padding:16px"></div>
+          <div id="vpc-agenda-detail" style="padding:0 16px 16px"></div>
+        </div>
+      </div>
+    </div>
+    <div id="vpc-tab-menu" style="display:none">
+      <div class="card"><div class="card-header"><div class="card-title">Menu de la semaine</div></div><div class="card-body" id="vpc-menu-contenu"></div></div>
+    </div>
+    <div id="vpc-tab-photos" style="display:none">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">📸 Photos</div><div class="card-subtitle" id="vpc-photos-subtitle">Partagées par la responsable</div></div>
+          <select id="vpc-photos-filtre" class="form-input" style="width:auto;padding:7px 12px;font-size:12px" onchange="renderVPCPhotos()">
+            <option value="tous">Toutes les photos</option>
+          </select>
+        </div>
+        <div class="card-body">
+          <div id="vpc-galerie-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+          <div id="vpc-galerie-vide" style="display:none;text-align:center;padding:40px 0">
+            <div style="font-size:36px;margin-bottom:8px">📷</div>
+            <div style="font-size:13px;color:var(--text-light)">Aucune photo partagée pour le moment.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ÉCRAN LOGIN -->
+<div id="ecran-login" style="display:flex;position:fixed;inset:0;background:var(--cream);z-index:500;align-items:center;justify-content:center">
+  <div style="width:420px;max-width:90vw">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:48px;margin-bottom:8px">🐺</div>
+      <h1 style="font-family:'Fraunces',serif;font-size:30px;font-weight:500;color:var(--brown)">Les Ti-lous</h1>
+      <p style="color:var(--text-light);font-size:13px;margin-top:4px">S.D.G en Milieu Familial</p>
+    </div>
+    <div style="display:flex;background:var(--warm);border-radius:12px;padding:4px;margin-bottom:24px">
+      <button id="tab-btn-responsable" onclick="switchLoginTab('responsable')" style="flex:1;padding:10px;border:none;border-radius:9px;background:var(--brown);color:white;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer">👩‍💼 Responsable</button>
+      <button id="tab-btn-parent" onclick="switchLoginTab('parent')" style="flex:1;padding:10px;border:none;border-radius:9px;background:transparent;color:var(--text-light);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer">👨‍👩‍👧 Parent</button>
+    </div>
+    <div id="login-responsable">
+      <div style="background:white;border-radius:16px;padding:24px;box-shadow:0 4px 20px var(--shadow)">
+        <div class="form-group">
+          <label class="form-label">Mot de passe</label>
+          <input type="password" class="form-input" id="login-mdp" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')connecterResponsable()">
+          <div style="font-size:11px;color:var(--text-light);margin-top:6px">Par défaut : <strong>garderie123</strong></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="connecterResponsable()">Se connecter</button>
+      </div>
+    </div>
+    <div id="login-parent" style="display:none">
+      <div style="background:white;border-radius:16px;padding:24px;box-shadow:0 4px 20px var(--shadow)">
+      <div id="debug-comptes" style="font-size:11px;color:var(--text-light);margin-bottom:12px;padding:8px;background:var(--warm);border-radius:8px;display:none"></div>
+        <div style="display:flex;gap:8px;margin-bottom:20px">
+          <button id="ptab-nouveau" onclick="switchParentTab('nouveau')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--brown);background:var(--brown);color:white;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">Nouveau compte</button>
+          <button id="ptab-existant" onclick="switchParentTab('existant')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--peach);background:transparent;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">J'ai déjà un compte</button>
+        </div>
+        <div id="form-parent-nouveau">
+          <div class="form-group"><label class="form-label">Votre nom</label><input type="text" class="form-input" id="p-nom" placeholder="Ex: Sophie Bouchard"></div>
+          <div class="form-group"><label class="form-label">Code d'invitation</label><input type="text" class="form-input" id="p-code" placeholder="Ex: LEA-4829" style="text-transform:uppercase;letter-spacing:2px;font-weight:600" oninput="this.value=this.value.toUpperCase()"></div>
+          <div class="form-group"><label class="form-label">Créer un mot de passe</label><input type="password" class="form-input" id="p-mdp-nouveau" placeholder="Minimum 4 caractères"></div>
+          <div id="p-erreur-nouveau" style="color:#C00;font-size:12px;margin-bottom:12px;display:none"></div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="creerCompteParent()">Créer mon compte</button>
+        </div>
+        <div id="form-parent-existant" style="display:none">
+          <div class="form-group"><label class="form-label">Votre nom</label><input type="text" class="form-input" id="p-nom-existant" placeholder="Ex: Sophie Bouchard"></div>
+          <div class="form-group"><label class="form-label">Mot de passe</label><input type="password" class="form-input" id="p-mdp-existant" placeholder="Votre mot de passe" onkeydown="if(event.key==='Enter')connecterParent()"></div>
+          <div id="p-erreur-existant" style="color:#C00;font-size:12px;margin-bottom:12px;display:none"></div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="connecterParent()">Se connecter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PHOTO PLEIN ÉCRAN -->
+<div id="modal-photo-viewer" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <button onclick="fermerPhotoViewer()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;color:white;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">✕</button>
+  <img id="photo-viewer-img" src="" style="max-width:88vw;max-height:78vh;border-radius:14px;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center">
+    <div id="photo-viewer-info" style="color:white;font-size:13px;text-align:center;width:100%"></div>
+    <button onclick="telechargerPhoto()" style="padding:8px 16px;border-radius:8px;background:rgba(255,255,255,0.2);color:white;border:none;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;font-weight:500">⬇️ Télécharger</button>
+    <button id="btn-suppr-photo" onclick="supprimerPhotoGalerie()" style="padding:8px 16px;border-radius:8px;background:rgba(220,50,50,0.8);color:white;border:none;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;font-weight:500">🗑️ Supprimer</button>
+  </div>
+</div>
+<!-- MODAL: AJOUTER ENFANT AU COMPTE PARENT -->
+<div id="modal-ajouter-enfant-parent" class="modal-overlay">
+  <div class="modal" style="width:400px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>👶 Ajouter un enfant</h3><button class="modal-close" onclick="closeModalById('modal-ajouter-enfant-parent')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Entrez le code d'invitation pour votre autre enfant.</p>
+      <div class="form-group">
+        <label class="form-label">Code d'invitation</label>
+        <input type="text" class="form-input" id="vpc-code-enfant" placeholder="Ex: NOA-9205" style="text-transform:uppercase;letter-spacing:3px;font-weight:600;font-size:16px;text-align:center" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')confirmerAjoutEnfantParent()">
+      </div>
+      <div id="vpc-add-erreur" style="color:#C00;font-size:12px;display:none;margin-top:-8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-ajouter-enfant-parent')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmerAjoutEnfantParent()">Lier cet enfant</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL: CONFIRMATION -->
+<div id="modal-confirmation" class="modal-overlay">
+  <div class="modal" style="width:360px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-body" style="padding:28px 24px;text-align:center">
+      <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+      <div id="modal-confirm-texte" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px"></div>
+      <div style="font-size:13px;color:var(--text-light)">Cette action est irréversible.</div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;gap:12px">
+      <button class="btn btn-outline" onclick="closeModalById('modal-confirmation')">Annuler</button>
+      <button class="btn btn-primary" id="modal-confirm-btn" style="background:#C00">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ABSENCE PARENT -->
+<div id="modal-absence-parent" class="modal-overlay">
+  <div class="modal" style="width:420px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header" style="background:#8A2A2A">
+      <h3>🤒 Signaler une absence</h3>
+      <button class="modal-close" onclick="closeModalById('modal-absence-parent')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" id="absence-enfant-group">
+        <label class="form-label">Enfant concerné</label>
+        <select class="form-input" id="absence-enfant-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date d'absence</label>
+        <input type="date" class="form-input" id="absence-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Raison</label>
+        <select class="form-input" id="absence-raison">
+          <option value="Maladie">🤒 Maladie</option>
+          <option value="Rendez-vous médical">🏥 Rendez-vous médical</option>
+          <option value="Congé familial">👨‍👩‍👧 Congé familial</option>
+          <option value="Vacances">🏖️ Vacances</option>
+          <option value="Autre">📝 Autre</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (optionnel)</label>
+        <textarea class="form-input" id="absence-note" rows="2" placeholder="Ex: Fièvre depuis hier soir..." style="resize:none"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-absence-parent')">Annuler</button>
+      <button class="btn btn-primary" style="background:#8A2A2A" onclick="envoyerAbsence()">Envoyer l'avis</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL: PRÉSENCE -->
+<div id="modal-ajout" class="modal-overlay">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>✅ Enregistrer une présence</h3><button class="modal-close" onclick="closeModalById('modal-ajout')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Enfant</label><select class="form-input" id="pres-enfant"></select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Arrivée</label><input type="time" class="form-input" value="08:00"></div>
+        <div class="form-group"><label class="form-label">Départ</label><input type="time" class="form-input" value="17:00"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note</label><input type="text" class="form-input" placeholder="Ex: légèrement fiévreux..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-ajout')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveAndClose('modal-ajout','✅ Présence enregistrée!')">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MESSAGE GROUPÉ -->
+<div id="modal-message" class="modal-overlay">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>✉️ Message groupé</h3><button class="modal-close" onclick="closeModalById('modal-message')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Destinataires</label>
+        <select class="form-input" id="msg-dest">
+          <option>Tous les parents</option>
+          <option>Famille Bouchard (Léa)</option>
+          <option>Famille Martin (Théo)</option>
+          <option>Famille Roy (Emma)</option>
+          <option>Famille Gagnon (Noah)</option>
+          <option>Famille Leblanc (Lucas)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Sujet</label><input type="text" class="form-input" id="msg-sujet" placeholder="Ex: Rappel — Sortie vendredi"></div>
+      <div class="form-group"><label class="form-label">Message</label><textarea class="form-input" id="msg-texte" rows="4" style="resize:none" placeholder="Votre message..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-message')">Annuler</button>
+      <button class="btn btn-primary" onclick="envoyerMessageGroupe()">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: FACTURE -->
+<div id="modal-facture" class="modal-overlay">
+  <div class="modal" style="width:480px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3 id="modal-facture-titre">💳 Nouvelle facture</h3><button class="modal-close" onclick="closeModalById('modal-facture')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group" id="f-famille-group">
+        <label class="form-label">Enfant concerné</label>
+        <select class="form-input" id="f-enfant-id" onchange="majFamilleDepuisEnfant()">
+          <option value="">— Choisir un enfant —</option>
+        </select>
+        <input type="hidden" id="f-famille" value="">
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><input type="text" class="form-input" id="f-desc" placeholder="Ex: Garde mars 2026"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Montant ($)</label><input type="number" class="form-input" id="f-montant" placeholder="380"></div>
+        <div class="form-group"><label class="form-label">Échéance</label><input type="date" class="form-input" id="f-echeance" value="2026-03-31"></div>
+      </div>
+      <div class="form-group" id="f-statut-group" style="display:none">
+        <label class="form-label">Statut</label>
+        <select class="form-input" id="f-statut">
+          <option value="attente">⏳ En attente</option>
+          <option value="payee">✅ Payée</option>
+          <option value="retard">🚨 En retard</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Note</label><input type="text" class="form-input" id="f-note" placeholder="Optionnel"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-facture');resetModalFacture()">Annuler</button>
+      <button class="btn btn-primary" id="modal-facture-btn" onclick="ajouterFacture()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ÉVÉNEMENT -->
+<div id="modal-evenement" class="modal-overlay">
+  <div class="modal" style="width:480px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>📅 Nouvel événement</h3><button class="modal-close" onclick="closeModalById('modal-evenement')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Titre</label><input type="text" class="form-input" id="ev-titre" placeholder="Ex: Activité peinture"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label><input type="date" class="form-input" id="ev-date"></div>
+        <div class="form-group"><label class="form-label">Heure</label><input type="time" class="form-input" id="ev-heure" value="09:00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Catégorie</label>
+          <select class="form-input" id="ev-cat">
+            <option value="activite">🎨 Activité</option>
+            <option value="sortie">🚌 Sortie</option>
+            <option value="repas">🍽️ Repas spécial</option>
+            <option value="conge">🏖️ Congé</option>
+            <option value="reunion">👥 Réunion</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Visible aux parents</label>
+          <select class="form-input" id="ev-visible"><option value="oui">✅ Oui</option><option value="non">🔒 Non</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Note</label><input type="text" class="form-input" id="ev-note" placeholder="Détails..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-evenement')">Annuler</button>
+      <button class="btn btn-primary" onclick="ajouterEvenement()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MENU -->
+<div id="modal-menu" class="modal-overlay">
+  <div class="modal" style="width:480px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3>✏️ Modifier le menu</h3><button class="modal-close" onclick="closeModalById('modal-menu')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Jour</label>
+        <select class="form-input" id="menu-edit-jour">
+          <option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">🌅 Déjeuner — Plat</label><input type="text" class="form-input" id="menu-matin-plat" placeholder="Ex: Gruau aux pommes"></div>
+      <div class="form-group"><label class="form-label">🌅 Déjeuner — Accompagnement</label><input type="text" class="form-input" id="menu-matin-acc" placeholder="Ex: Fruits frais"></div>
+      <div class="form-group"><label class="form-label">☀️ Dîner — Plat</label><input type="text" class="form-input" id="menu-midi-plat" placeholder="Ex: Pâtes bolognaise"></div>
+      <div class="form-group"><label class="form-label">☀️ Dîner — Accompagnement</label><input type="text" class="form-input" id="menu-midi-acc" placeholder="Ex: Légumes vapeur"></div>
+      <div class="form-group"><label class="form-label">🌤️ Collation</label><input type="text" class="form-input" id="menu-collation-plat" placeholder="Ex: Pommes et fromage"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-menu')">Annuler</button>
+      <button class="btn btn-primary" onclick="sauvegarderMenu()">💾 Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PROFIL ENFANT -->
+<div id="modal-enfant" class="modal-overlay">
+  <div class="modal" style="width:500px;max-width:95vw" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3 id="modal-enfant-titre">👶 Inscrire un enfant</h3><button class="modal-close" onclick="closeModalById('modal-enfant')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Prénom</label><input type="text" class="form-input" id="enf-prenom" placeholder="Ex: Léa"></div>
+        <div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="enf-nom" placeholder="Ex: Bouchard"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date de naissance</label><input type="date" class="form-input" id="enf-ddn"></div>
+        <div class="form-group"><label class="form-label">Groupe</label>
+          <select class="form-input" id="enf-groupe">
+            <option>Bébés (0-18 mois)</option><option>Petits (18 mois-3 ans)</option><option>Moyens (3-4 ans)</option><option>Grands (4-5 ans)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo de profil</label>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div id="enf-photo-preview" style="width:72px;height:72px;border-radius:16px;background:var(--sage-light);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;border:2px solid var(--peach)">👶</div>
+          <div>
+            <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:var(--brown);color:white;font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif">
+              📷 Choisir une photo
+              <input type="file" id="enf-photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+            </label>
+            <button type="button" onclick="effacerPhoto()" style="margin-top:6px;display:block;font-size:11px;color:var(--text-light);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif">✕ Retirer la photo</button>
+          </div>
+        </div>
+        <input type="hidden" id="enf-photo-data" value="">
+      </div>
+      <div class="form-group"><label class="form-label">Allergie / Note médicale</label><input type="text" class="form-input" id="enf-allergie" placeholder="Ex: Allergie aux arachides"></div>
+      <div id="enf-code-section" style="display:none;background:var(--warm);border-radius:12px;padding:16px;margin-top:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Code d'invitation parents</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div id="enf-code-display" style="font-family:'Fraunces',serif;font-size:28px;font-weight:700;color:var(--brown);letter-spacing:4px"></div>
+          <button onclick="copierCode()" style="padding:6px 12px;border-radius:8px;background:var(--brown);color:white;border:none;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif">📋 Copier</button>
+        </div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:8px">Donnez ce code aux parents — max 2 parents par enfant.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalById('modal-enfant')">Annuler</button>
+      <button class="btn btn-primary" id="modal-enfant-btn" onclick="creerEnfant()">Créer le profil</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+
 </body>
 </html>
