@@ -724,9 +724,51 @@ async function ouvrirChatResp(parentId){
     }
   },3000);
 }
-async function envoyerChatResp(){const input=document.getElementById('chat-input-resp');const texte=input.value.trim();if(!texte||!chatRespActifId)return;const chat=await getChatParent(chatRespActifId);if(!chat.messages)chat.messages=[];chat.messages.push({de:'responsable',texte,heure:new Date().toLocaleString('fr-CA'),lu:false});await saveChatParent(chatRespActifId);input.value='';input.style.height='auto';renderChatFil('chat-fil-resp',chat,'responsable');renderConversationsListe();}
+async function envoyerChatResp(){
+  const input=document.getElementById('chat-input-resp');
+  const texte=input.value.trim();if(!texte||!chatRespActifId)return;
+  const chat=await getChatParent(chatRespActifId);
+  if(!chat.messages)chat.messages=[];
+  const msg={de:'responsable',texte,heure:new Date().toLocaleString('fr-CA'),lu:false};
+  chat.messages.push(msg);
+  await saveChatParent(chatRespActifId);
+  input.value='';input.style.height='auto';
+  // Ajouter le message directement sans re-rendre tout le fil
+  const fil=document.getElementById('chat-fil-resp');
+  if(fil){
+    const wrapper=document.createElement('div');
+    wrapper.innerHTML=msgHTML(msg,'responsable');
+    fil.appendChild(wrapper.firstChild);
+    chatRendered['chat-fil-resp']=chat.messages.length;
+    fil.scrollTop=fil.scrollHeight;
+  }
+  // Mettre à jour le compteur du polling pour éviter le doublon
+  lastChatCount_resp=chat.messages.length;
+  renderConversationsListe();
+}
 async function renderChatParent(){const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const fresh=await apiGetChat(String(compte.id));if(fresh)chats[String(compte.id)]=fresh;const chat=chats[String(compte.id)]||{messages:[]};(chat.messages||[]).forEach(m=>{if(m.de==='responsable')m.lu=true;});await saveChatParent(compte.id);if(!chatRendered['vpc-chat-fil'])chatRendered['vpc-chat-fil']=0;renderChatFil('vpc-chat-fil',chat,'parent');renderAnnonces();}
-async function envoyerChatParent(){const input=document.getElementById('vpc-chat-input');const texte=input.value.trim();if(!texte)return;const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const chat=await getChatParent(compte.id);if(!chat.messages)chat.messages=[];chat.messages.push({de:'parent',texte,heure:new Date().toLocaleString('fr-CA'),lu:false});await saveChatParent(compte.id);input.value='';input.style.height='auto';renderChatFil('vpc-chat-fil',chat,'parent');}
+async function envoyerChatParent(){
+  const input=document.getElementById('vpc-chat-input');
+  const texte=input.value.trim();if(!texte)return;
+  const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;
+  const chat=await getChatParent(compte.id);
+  if(!chat.messages)chat.messages=[];
+  const msg={de:'parent',texte,heure:new Date().toLocaleString('fr-CA'),lu:false};
+  chat.messages.push(msg);
+  await saveChatParent(compte.id);
+  input.value='';input.style.height='auto';
+  // Ajouter directement sans re-rendre
+  const fil=document.getElementById('vpc-chat-fil');
+  if(fil){
+    const wrapper=document.createElement('div');
+    wrapper.innerHTML=msgHTML(msg,'parent');
+    fil.appendChild(wrapper.firstChild);
+    chatRendered['vpc-chat-fil']=chat.messages.length;
+    fil.scrollTop=fil.scrollHeight;
+  }
+  // Mettre à jour le compteur pour éviter le doublon
+  lastChatCount_parent=chat.messages.length;
+}
 function msgHTML(m,vueDe){const estMoi=m.de===vueDe,isAbsence=m.type==='absence';return`<div style="display:flex;flex-direction:column;align-items:${estMoi?'flex-end':'flex-start'}"><div style="max-width:80%;padding:10px 14px;border-radius:${estMoi?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isAbsence?'var(--rose-light)':estMoi?'var(--brown)':'white'};color:${isAbsence?'#8A2A2A':estMoi?'white':'var(--text)'};font-size:13px;line-height:1.6;border:${isAbsence?'1.5px solid #D9A0A0':'none'};box-shadow:0 1px 4px var(--shadow)">${(m.texte||'').split('\n').join('<br>')}</div><div style="font-size:10px;color:var(--text-light);margin-top:3px;padding:0 4px">${m.heure||''}</div></div>`;}
 
 const chatRendered={};
