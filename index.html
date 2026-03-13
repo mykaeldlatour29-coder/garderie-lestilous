@@ -693,7 +693,19 @@ async function ouvrirChatResp(parentId){
   renderChatFil('chat-fil-resp',chat,'responsable');
   const s=document.getElementById('chat-saisie-resp');if(s)s.style.display='flex';
   const inp=document.getElementById('chat-input-resp');if(inp)inp.focus();
-  startPolling('chat_actif',async()=>{const fresh=await apiGetChat(parentId);if(fresh){chats[String(parentId)]=fresh;renderChatFil('chat-fil-resp',fresh,'responsable');renderConversationsListe();}},3000);
+  let lastChatCount_resp = (chats[String(parentId)]?.messages||[]).length;
+  startPolling('chat_actif',async()=>{
+    const fresh=await apiGetChat(parentId);
+    if(fresh){
+      const newCount=(fresh.messages||[]).length;
+      if(newCount!==lastChatCount_resp){
+        lastChatCount_resp=newCount;
+        chats[String(parentId)]=fresh;
+        renderChatFil('chat-fil-resp',fresh,'responsable');
+        renderConversationsListe();
+      }
+    }
+  },3000);
 }
 async function envoyerChatResp(){const input=document.getElementById('chat-input-resp');const texte=input.value.trim();if(!texte||!chatRespActifId)return;const chat=await getChatParent(chatRespActifId);if(!chat.messages)chat.messages=[];chat.messages.push({de:'responsable',texte,heure:new Date().toLocaleString('fr-CA'),lu:false});await saveChatParent(chatRespActifId);input.value='';input.style.height='auto';renderChatFil('chat-fil-resp',chat,'responsable');renderConversationsListe();}
 async function renderChatParent(){const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const fresh=await apiGetChat(String(compte.id));if(fresh)chats[String(compte.id)]=fresh;const chat=chats[String(compte.id)]||{messages:[]};(chat.messages||[]).forEach(m=>{if(m.de==='responsable')m.lu=true;});await saveChatParent(compte.id);renderChatFil('vpc-chat-fil',chat,'parent');renderAnnonces();}
@@ -729,14 +741,20 @@ async function ouvrirVueParentConnecte(compte,enfantIdActif){
   document.getElementById('vpc-enfant-info').textContent=enfant?calculerAge(enfant.ddn)+(enfant.groupe?' · '+enfant.groupe.split(' ')[0]:'')+(enfant.allergie?' · ⚠️ '+enfant.allergie:''):'';
   const sw=document.getElementById('vpc-enfant-switcher');sw.innerHTML=mesEnfants.length>1?`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${mesEnfants.map(e=>`<button onclick="vpcSwitchEnfant('${e.id}')" style="padding:5px 12px;border-radius:10px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;border:1.5px solid var(--peach);background:${String(e.id)===String(vpcEnfantId)?'var(--brown)':'white'};color:${String(e.id)===String(vpcEnfantId)?'white':'var(--text)'}">${e.prenom}</button>`).join('')}</div>`:'';
   renderVPCFactures();renderChatParent();renderVPCAgenda();renderVPCMenu();
+  let lastChatCount_parent = (chats[String(compte.id)]?.messages||[]).length;
   startPolling('parent_poll',async()=>{
     [photosGalerie,messagesEnvoyes,factures]=await Promise.all([apiGet('photos'),apiGet('messagesEnvoyes'),apiGet('factures')]);
-    const freshChat=await apiGetChat(String(compte.id));if(freshChat)chats[String(compte.id)]=freshChat;
-    const tabActif=document.querySelector('.active-vpc-tab');
-    if(tabActif){const onclick=tabActif.getAttribute('onclick')||'';
-      if(onclick.includes('messages'))renderChatParent();
-      if(onclick.includes('photos'))renderVPCPhotos();
-      if(onclick.includes('factures'))renderVPCFactures();
+    const freshChat=await apiGetChat(String(compte.id));
+    if(freshChat){
+      const newCount=(freshChat.messages||[]).length;
+      const changed=newCount!==lastChatCount_parent;
+      if(changed){lastChatCount_parent=newCount;chats[String(compte.id)]=freshChat;}
+      const tabActif=document.querySelector('.active-vpc-tab');
+      if(tabActif){const onclick=tabActif.getAttribute('onclick')||'';
+        if(onclick.includes('messages')&&changed)renderChatParent();
+        if(onclick.includes('photos'))renderVPCPhotos();
+        if(onclick.includes('factures'))renderVPCFactures();
+      }
     }
   },5000);
 }
