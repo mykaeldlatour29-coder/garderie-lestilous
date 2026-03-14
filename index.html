@@ -320,12 +320,19 @@
 const API = '/.netlify/functions/db';
 
 async function apiGet(col) {
-  const r = await fetch(`${API}?action=getAll&col=${col}`);
-  return r.json();
+  try {
+    const r = await fetch(`${API}?action=getAll&col=${col}`);
+    if (!r.ok) return null; // retourner null pour indiquer erreur
+    const data = await r.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) { return null; }
 }
 async function apiGetDoc(col, id) {
-  const r = await fetch(`${API}?action=getDoc&col=${col}&id=${encodeURIComponent(id)}`);
-  return r.json();
+  try {
+    const r = await fetch(`${API}?action=getDoc&col=${col}&id=${encodeURIComponent(id)}`);
+    if (!r.ok) return null;
+    return r.json();
+  } catch(e) { return null; }
 }
 async function apiAdd(col, data) {
   const r = await fetch(`${API}?action=add&col=${col}`, {
@@ -438,10 +445,18 @@ async function connecterResponsable() {
 }
 
 async function chargerDonnees() {
-  [enfants,compteParents,factures,evenements,messagesEnvoyes,absences,photosGalerie] = await Promise.all([
+  const [e,p,f,ev,m,a,ph] = await Promise.all([
     apiGet('enfants'),apiGet('parents'),apiGet('factures'),apiGet('evenements'),
     apiGet('messagesEnvoyes'),apiGet('absences'),apiGet('photos')
   ]);
+  // Seulement remplacer si la réponse est valide (pas null = erreur serveur)
+  if(e  !== null) enfants = e;
+  if(p  !== null) compteParents = p;
+  if(f  !== null) factures = f;
+  if(ev !== null) evenements = ev;
+  if(m  !== null) messagesEnvoyes = m;
+  if(a  !== null) absences = a;
+  if(ph !== null) photosGalerie = ph;
 }
 
 function hashLeger(liste){
@@ -450,46 +465,27 @@ function hashLeger(liste){
 }
 
 function demarrerPollingResponsable() {
-  let snapEnfants=hashLeger(enfants);
-  let snapFactures=hashLeger(factures);
-  let snapAbsences=hashLeger(absences);
-  let snapEvenements=hashLeger(evenements);
+  let snapAbsences = hashLeger(absences);
 
   startPolling('resp_main', async()=>{
-    const [newEnfants,newParents,newFactures,newEvenements,newAbsences] = await Promise.all([
-      apiGet('enfants'),apiGet('parents'),apiGet('factures'),apiGet('evenements'),apiGet('absences')
+    // RÈGLE ABSOLUE: jamais écraser les données locales avec moins de données
+    const [newEnfants, newParents, newFactures, newEvenements, newAbsences] = await Promise.all([
+      apiGet('enfants'), apiGet('parents'), apiGet('factures'), apiGet('evenements'), apiGet('absences')
     ]);
 
-    const enfantsChanged   = hashLeger(newEnfants)   !== snapEnfants;
-    const facturesChanged  = hashLeger(newFactures)  !== snapFactures;
-    const absencesChanged  = hashLeger(newAbsences)  !== snapAbsences;
-    const evenementsChanged= hashLeger(newEvenements)!== snapEvenements;
+    // Seulement mettre à jour si réponse valide ET au moins autant de données
+    if(newEnfants   !== null && newEnfants.length   >= enfants.length)       enfants = newEnfants;
+    if(newParents   !== null && newParents.length   >= compteParents.length) compteParents = newParents;
+    if(newFactures  !== null && newFactures.length  >= factures.length)      factures = newFactures;
+    if(newEvenements!== null && newEvenements.length>= evenements.length)    evenements = newEvenements;
 
-    // Mettre à jour les données
-    enfants=newEnfants; compteParents=newParents;
-    factures=newFactures; evenements=newEvenements; absences=newAbsences;
+    // Absences: toujours accepter (on peut avoir de nouvelles absences)
+    const absancesChanged = hashLeger(newAbsences) !== snapAbsences;
+    if(absancesChanged){ absences = newAbsences; snapAbsences = hashLeger(absences); renderDashboardAbsences(); }
 
-    // Mettre à jour les snaps
-    if(enfantsChanged)   snapEnfants   = hashLeger(enfants);
-    if(facturesChanged)  snapFactures  = hashLeger(factures);
-    if(absencesChanged)  snapAbsences  = hashLeger(absences);
-    if(evenementsChanged)snapEvenements= hashLeger(evenements);
-
-    // Re-rendre SEULEMENT si changement réel
-    if(absencesChanged) renderDashboardAbsences();
-    if(enfantsChanged){
-      // Mettre à jour stats dashboard sans re-rendre toute la liste
-      const bE=document.getElementById('nav-badge-enfants');if(bE)bE.textContent=enfants.length;
-      const el=document.getElementById('dashboard-date');
-      if(el)el.textContent=el.textContent.replace(/\d+ enfants inscrits/,enfants.length+' enfants inscrits');
-      if(document.getElementById('page-enfants').classList.contains('active')) renderEnfants();
-    }
-    if(facturesChanged){
-      const sF=document.getElementById('stat-factures');if(sF)sF.textContent=factures.filter(f=>f.statut!=='payee').length;
-      if(document.getElementById('page-factures').classList.contains('active')) renderFactures(filtreActuel);
-    }
-    if(evenementsChanged && document.getElementById('page-agenda').classList.contains('active')) renderCalendrier();
-  }, 8000);
+    // NE PAS re-rendre les pages — le polling sert juste à garder les données à jour
+    // Le rendu se fait seulement quand l'utilisateur navigue ou fait une action
+  }, 10000);
 }
 
 function switchLoginTab(tab){
