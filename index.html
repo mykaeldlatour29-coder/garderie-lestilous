@@ -573,19 +573,48 @@ function deconnecter(){
 }
 
 // ==================== NAVIGATION ====================
+// Cache des hash de rendu par page
+const pageRenderHash = {};
+
 function showPage(id,navEl){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(navEl){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));navEl.classList.add('active');}
-  if(id==='dashboard')renderDashboard();
-  if(id==='enfants')renderEnfants();
-  if(id==='factures')renderFactures(filtreActuel);
-  if(id==='agenda')renderCalendrier();
-  if(id==='menu')renderMenuPage();
-  if(id==='messages')renderConversationsListe();
-  if(id==='photos')initGalerie();
-  if(id==='presences')initPresences();
+
+  // Ne re-rendre que si les données ont changé depuis le dernier rendu de cette page
+  const currentHash = {
+    enfants: hashLeger(enfants),
+    factures: hashLeger(factures),
+    evenements: hashLeger(evenements),
+    messages: hashLeger(messagesEnvoyes),
+    photos: hashLeger(photosGalerie),
+    absences: hashLeger(absences)
+  };
+
+  if(id==='dashboard') renderDashboard();
+  if(id==='enfants'){
+    const h = currentHash.enfants;
+    if(pageRenderHash.enfants !== h){ pageRenderHash.enfants=h; renderEnfants(); }
+  }
+  if(id==='factures'){
+    const h = currentHash.factures;
+    if(pageRenderHash.factures !== h){ pageRenderHash.factures=h; renderFactures(filtreActuel); }
+  }
+  if(id==='agenda'){
+    const h = currentHash.evenements;
+    if(pageRenderHash.agenda !== h){ pageRenderHash.agenda=h; renderCalendrier(); }
+  }
+  if(id==='menu') renderMenuPage();
+  if(id==='messages') renderConversationsListe();
+  if(id==='photos'){
+    const h = currentHash.photos;
+    if(pageRenderHash.photos !== h){ pageRenderHash.photos=h; initGalerie(); }
+  }
+  if(id==='presences') initPresences();
 }
+
+// Invalider le cache quand on modifie les données localement
+function invalidatePageCache(...pages){ pages.forEach(p => delete pageRenderHash[p]); }
 
 // ==================== DASHBOARD ====================
 function renderDashboard(){
@@ -631,6 +660,7 @@ async function creerEnfant(){
   const code=genererCode(prenom);
   const enf={prenom,nom,ddn:document.getElementById('enf-ddn').value,groupe:document.getElementById('enf-groupe').value,allergie:document.getElementById('enf-allergie').value,code,photo:document.getElementById('enf-photo-data').value||'',parents:[]};
   const newId=await apiAdd('enfants',enf);enf.id=newId;enfants.push(enf);
+  invalidatePageCache('enfants','dashboard');
   document.getElementById('enf-code-display').textContent=code;document.getElementById('enf-code-section').style.display='block';
   document.getElementById('modal-enfant-btn').textContent='Fermer';document.getElementById('modal-enfant-btn').onclick=()=>closeModalById('modal-enfant');
   showToast('👶 Créé! Code: '+code);
@@ -651,9 +681,10 @@ async function sauvegarderEnfant(id){
   e.prenom=document.getElementById('enf-prenom').value.trim()||e.prenom;e.nom=document.getElementById('enf-nom').value.trim()||e.nom;
   e.ddn=document.getElementById('enf-ddn').value;e.groupe=document.getElementById('enf-groupe').value;e.allergie=document.getElementById('enf-allergie').value;
   const pd=document.getElementById('enf-photo-data').value;if(pd)e.photo=pd;
+  invalidatePageCache('enfants','dashboard');
   await apiSet('enfants',id,e);closeModalById('modal-enfant');showToast('💾 Modifié!');
 }
-function supprimerEnfant(id){const enf=enfants.find(e=>String(e.id)===String(id));if(!enf)return;afficherConfirmation('🗑️ Supprimer '+enf.prenom+'?',async()=>{await apiDelete('enfants',id);enfants=enfants.filter(e=>String(e.id)!==String(id));renderEnfants();showToast('🗑️ Supprimé');});}
+function supprimerEnfant(id){const enf=enfants.find(e=>String(e.id)===String(id));if(!enf)return;afficherConfirmation('🗑️ Supprimer '+enf.prenom+'?',async()=>{invalidatePageCache('enfants','dashboard');await apiDelete('enfants',id);enfants=enfants.filter(e=>String(e.id)!==String(id));renderEnfants();showToast('🗑️ Supprimé');});}
 function previewPhoto(input){if(!input.files||!input.files[0])return;const file=input.files[0];if(file.size>2*1024*1024){showToast('⚠️ Max 2 Mo');return;}const reader=new FileReader();reader.onload=e=>{document.getElementById('enf-photo-data').value=e.target.result;document.getElementById('enf-photo-preview').innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:14px">`;};reader.readAsDataURL(file);}
 function effacerPhoto(){document.getElementById('enf-photo-data').value='';document.getElementById('enf-photo-preview').innerHTML='👶';}
 function copierCode(){navigator.clipboard.writeText(document.getElementById('enf-code-display').textContent);showToast('📋 Copié!');}
@@ -672,10 +703,10 @@ function filtrerFactures(v){renderFactures(v);}
 async function marquerPaye(id){await apiUpdate('factures',id,{statut:'payee'});const f=factures.find(x=>String(x.id)===String(id));if(f)f.statut='payee';renderFactures(filtreActuel);showToast('✅ Payée!');}
 function supprimerFacture(id){const f=factures.find(x=>String(x.id)===String(id));afficherConfirmation('🗑️ Supprimer '+(f?f.desc:'')+'?',async()=>{await apiDelete('factures',id);factures=factures.filter(x=>String(x.id)!==String(id));renderFactures(filtreActuel);showToast('🗑️ Supprimée');});}
 function ouvrirModifFacture(id){const f=factures.find(x=>String(x.id)===String(id));if(!f)return;factureEnEdition=id;document.getElementById('f-desc').value=f.desc||'';document.getElementById('f-montant').value=f.montant||'';document.getElementById('f-echeance').value=f.echeance||'';document.getElementById('f-note').value=f.note||'';document.getElementById('f-statut').value=f.statut||'attente';document.getElementById('modal-facture-titre').textContent='✏️ Modifier — '+f.famille;document.getElementById('modal-facture-btn').textContent='💾 Sauvegarder';document.getElementById('modal-facture-btn').onclick=sauvegarderModifFacture;document.getElementById('f-famille-group').style.display='none';document.getElementById('f-statut-group').style.display='block';openModal('modal-facture');}
-async function sauvegarderModifFacture(){const f=factures.find(x=>String(x.id)===String(factureEnEdition));if(!f)return;f.desc=document.getElementById('f-desc').value||f.desc;f.montant=parseInt(document.getElementById('f-montant').value)||f.montant;f.echeance=document.getElementById('f-echeance').value||f.echeance;f.note=document.getElementById('f-note').value;f.statut=document.getElementById('f-statut').value;await apiSet('factures',factureEnEdition,f);factureEnEdition=null;closeModalById('modal-facture');renderFactures(filtreActuel);showToast('💾 Modifiée!');}
+async function sauvegarderModifFacture(){const f=factures.find(x=>String(x.id)===String(factureEnEdition));if(!f)return;f.desc=document.getElementById('f-desc').value||f.desc;f.montant=parseInt(document.getElementById('f-montant').value)||f.montant;f.echeance=document.getElementById('f-echeance').value||f.echeance;f.note=document.getElementById('f-note').value;f.statut=document.getElementById('f-statut').value;invalidatePageCache('factures','dashboard');await apiSet('factures',factureEnEdition,f);factureEnEdition=null;closeModalById('modal-facture');renderFactures(filtreActuel);showToast('💾 Modifiée!');}
 function majFamilleDepuisEnfant(){const sel=document.getElementById('f-enfant-id');const enf=enfants.find(e=>String(e.id)===String(sel.value));document.getElementById('f-famille').value=enf?enf.nom:'';}
 function resetModalFacture(){factureEnEdition=null;document.getElementById('modal-facture-titre').textContent='💳 Nouvelle facture';document.getElementById('modal-facture-btn').textContent='Créer';document.getElementById('modal-facture-btn').onclick=ajouterFacture;document.getElementById('f-famille-group').style.display='block';document.getElementById('f-statut-group').style.display='none';['f-desc','f-montant','f-note'].forEach(id=>document.getElementById(id).value='');document.getElementById('f-echeance').value=new Date().getFullYear()+'-'+String(new Date().getMonth()+2).padStart(2,'0')+'-28';const sel=document.getElementById('f-enfant-id');sel.innerHTML='<option value="">— Choisir un enfant —</option>'+enfants.map(e=>`<option value="${e.id}">${e.prenom} ${e.nom}</option>`).join('');}
-async function ajouterFacture(){const enfantId=document.getElementById('f-enfant-id').value;const enf=enfants.find(e=>String(e.id)===String(enfantId));if(!enf){showToast('⚠️ Choisissez un enfant');return;}const f={enfantId:enf.id,famille:enf.nom,enfant:enf.prenom+' '+enf.nom,desc:document.getElementById('f-desc').value||'Garde',montant:parseInt(document.getElementById('f-montant').value)||380,echeance:document.getElementById('f-echeance').value,note:document.getElementById('f-note').value,statut:'attente'};await apiAdd('factures',f);closeModalById('modal-facture');showToast('💳 Créée pour '+enf.prenom+'!');}
+async function ajouterFacture(){const enfantId=document.getElementById('f-enfant-id').value;const enf=enfants.find(e=>String(e.id)===String(enfantId));if(!enf){showToast('⚠️ Choisissez un enfant');return;}const f={enfantId:enf.id,famille:enf.nom,enfant:enf.prenom+' '+enf.nom,desc:document.getElementById('f-desc').value||'Garde',montant:parseInt(document.getElementById('f-montant').value)||380,echeance:document.getElementById('f-echeance').value,note:document.getElementById('f-note').value,statut:'attente'};invalidatePageCache('factures','dashboard');await apiAdd('factures',f);closeModalById('modal-facture');showToast('💳 Créée pour '+enf.prenom+'!');}
 
 // ==================== AGENDA ====================
 function renderCalendrier(){
