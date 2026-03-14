@@ -462,18 +462,33 @@ async function chargerDonnees() {
 }
 
 function demarrerPollingResponsable() {
+  // Snapshots pour détecter les vrais changements
+  let snapEnfants=JSON.stringify(enfants);
+  let snapFactures=JSON.stringify(factures);
+  let snapAbsences=JSON.stringify(absences);
+
   startPolling('resp_main', async()=>{
-    [enfants,compteParents,factures,evenements,absences] = await Promise.all([
+    const [newEnfants,newParents,newFactures,newEvenements,newAbsences] = await Promise.all([
       apiGet('enfants'),apiGet('parents'),apiGet('factures'),apiGet('evenements'),apiGet('absences')
     ]);
-    renderDashboard();
-    if(document.getElementById('page-enfants').classList.contains('active')) renderEnfants();
-    if(document.getElementById('page-factures').classList.contains('active')) renderFactures(filtreActuel);
-    if(chatRespActifId) {
-      const fresh = await apiGetChat(chatRespActifId);
-      if(fresh){chats[String(chatRespActifId)]=fresh;renderChatFil('chat-fil-resp',fresh,'responsable');renderConversationsListe();}
+    const enfantsChanged = JSON.stringify(newEnfants)!==snapEnfants;
+    const facturesChanged = JSON.stringify(newFactures)!==snapFactures;
+    const absencesChanged = JSON.stringify(newAbsences)!==snapAbsences;
+
+    enfants=newEnfants; compteParents=newParents; factures=newFactures; evenements=newEvenements; absences=newAbsences;
+
+    // Ne re-rendre que si données ont changé
+    if(enfantsChanged||absencesChanged){
+      snapEnfants=JSON.stringify(enfants);
+      snapAbsences=JSON.stringify(absences);
+      renderDashboard();
     }
-  }, 5000);
+    if(enfantsChanged && document.getElementById('page-enfants').classList.contains('active')) renderEnfants();
+    if(facturesChanged){
+      snapFactures=JSON.stringify(factures);
+      if(document.getElementById('page-factures').classList.contains('active')) renderFactures(filtreActuel);
+    }
+  }, 8000);
 }
 
 function switchLoginTab(tab){
@@ -690,35 +705,19 @@ async function ouvrirChatResp(parentId){
   renderConversationsListe();
   const mesEnfants=(p.enfantIds||[]).map(id=>enfants.find(e=>String(e.id)===String(id))).filter(Boolean);
   const h=document.getElementById('chat-header-actif');if(h)h.innerHTML=`<div><div class="card-title">${p.nom}</div><div class="card-subtitle">${mesEnfants.map(e=>e.prenom+' '+e.nom).join(' · ')}</div></div>`;
-  chatRendered['chat-fil-resp']=0;
+  resetChatFil('chat-fil-resp');
   renderChatFil('chat-fil-resp',chat,'responsable');
   const s=document.getElementById('chat-saisie-resp');if(s)s.style.display='flex';
   const inp=document.getElementById('chat-input-resp');if(inp)inp.focus();
-  let lastChatCount_resp = (chats[String(parentId)]?.messages||[]).length;
   startPolling('chat_actif',async()=>{
     const fresh=await apiGetChat(parentId);
     if(fresh){
       const newCount=(fresh.messages||[]).length;
-      if(newCount!==lastChatCount_resp){
-        lastChatCount_resp=newCount;
+      const prevHash=chatState['chat-fil-resp']?.hash||''; const curHash=String(newCount)+'|'+((fresh.messages||[]).slice(-1)[0]?.heure||''); if(curHash!==prevHash){
         chats[String(parentId)]=fresh;
         // Ajouter seulement les nouveaux messages sans reset
         const fil=document.getElementById('chat-fil-resp');
-        if(fil&&fil.children.length>0){
-          const msgs=fresh.messages||[];
-          const rendered=chatRendered['chat-fil-resp']||0;
-          if(msgs.length>rendered){
-            msgs.slice(rendered).forEach(m=>{
-              const div=document.createElement('div');
-              div.innerHTML=msgHTML(m,'responsable');
-              fil.appendChild(div.firstChild);
-            });
-            chatRendered['chat-fil-resp']=msgs.length;
-            fil.scrollTop=fil.scrollHeight;
-          }
-        } else {
-          renderChatFil('chat-fil-resp',fresh,'responsable');
-        }
+        renderChatFil('chat-fil-resp',fresh,'responsable');
         renderConversationsListe();
       }
     }
@@ -729,70 +728,72 @@ async function envoyerChatResp(){
   const texte=input.value.trim();if(!texte||!chatRespActifId)return;
   const chat=await getChatParent(chatRespActifId);
   if(!chat.messages)chat.messages=[];
-  const msg={de:'responsable',texte,heure:new Date().toLocaleString('fr-CA'),lu:false};
-  chat.messages.push(msg);
+  chat.messages.push({de:'responsable',texte,heure:new Date().toLocaleString('fr-CA'),lu:false});
   await saveChatParent(chatRespActifId);
   input.value='';input.style.height='auto';
-  // Ajouter le message directement sans re-rendre tout le fil
-  const fil=document.getElementById('chat-fil-resp');
-  if(fil){
-    const wrapper=document.createElement('div');
-    wrapper.innerHTML=msgHTML(msg,'responsable');
-    fil.appendChild(wrapper.firstChild);
-    chatRendered['chat-fil-resp']=chat.messages.length;
-    fil.scrollTop=fil.scrollHeight;
-  }
-  // Mettre à jour le compteur du polling pour éviter le doublon
-  lastChatCount_resp=chat.messages.length;
+  renderChatFil('chat-fil-resp',chat,'responsable');
   renderConversationsListe();
 }
-async function renderChatParent(){const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const fresh=await apiGetChat(String(compte.id));if(fresh)chats[String(compte.id)]=fresh;const chat=chats[String(compte.id)]||{messages:[]};(chat.messages||[]).forEach(m=>{if(m.de==='responsable')m.lu=true;});await saveChatParent(compte.id);if(!chatRendered['vpc-chat-fil'])chatRendered['vpc-chat-fil']=0;renderChatFil('vpc-chat-fil',chat,'parent');renderAnnonces();}
+async function renderChatParent(){const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const fresh=await apiGetChat(String(compte.id));if(fresh)chats[String(compte.id)]=fresh;const chat=chats[String(compte.id)]||{messages:[]};(chat.messages||[]).forEach(m=>{if(m.de==='responsable')m.lu=true;});await saveChatParent(compte.id);renderChatFil('vpc-chat-fil',chat,'parent');renderAnnonces();}
 async function envoyerChatParent(){
   const input=document.getElementById('vpc-chat-input');
   const texte=input.value.trim();if(!texte)return;
   const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;
   const chat=await getChatParent(compte.id);
   if(!chat.messages)chat.messages=[];
-  const msg={de:'parent',texte,heure:new Date().toLocaleString('fr-CA'),lu:false};
-  chat.messages.push(msg);
+  chat.messages.push({de:'parent',texte,heure:new Date().toLocaleString('fr-CA'),lu:false});
   await saveChatParent(compte.id);
   input.value='';input.style.height='auto';
-  // Ajouter directement sans re-rendre
-  const fil=document.getElementById('vpc-chat-fil');
-  if(fil){
-    const wrapper=document.createElement('div');
-    wrapper.innerHTML=msgHTML(msg,'parent');
-    fil.appendChild(wrapper.firstChild);
-    chatRendered['vpc-chat-fil']=chat.messages.length;
-    fil.scrollTop=fil.scrollHeight;
-  }
-  // Mettre à jour le compteur pour éviter le doublon
-  lastChatCount_parent=chat.messages.length;
+  renderChatFil('vpc-chat-fil',chat,'parent');
 }
-function msgHTML(m,vueDe){const estMoi=m.de===vueDe,isAbsence=m.type==='absence';return`<div style="display:flex;flex-direction:column;align-items:${estMoi?'flex-end':'flex-start'}"><div style="max-width:80%;padding:10px 14px;border-radius:${estMoi?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isAbsence?'var(--rose-light)':estMoi?'var(--brown)':'white'};color:${isAbsence?'#8A2A2A':estMoi?'white':'var(--text)'};font-size:13px;line-height:1.6;border:${isAbsence?'1.5px solid #D9A0A0':'none'};box-shadow:0 1px 4px var(--shadow)">${(m.texte||'').split('\n').join('<br>')}</div><div style="font-size:10px;color:var(--text-light);margin-top:3px;padding:0 4px">${m.heure||''}</div></div>`;}
+// ==================== SYSTÈME CHAT PROPRE ====================
+// Hash simple basé sur le nombre et le dernier message
+function chatHash(msgs){ return (msgs||[]).length + '|' + ((msgs||[]).slice(-1)[0]?.heure||''); }
 
-const chatRendered={};
-function renderChatFil(conteneurId,chat,vueDe){
-  const fil=document.getElementById(conteneurId);if(!fil)return;
-  const msgs=chat.messages||[];
-  if(msgs.length===0){fil.innerHTML='<p style="color:var(--text-light);font-size:13px;text-align:center;margin-top:40px">Commencez la conversation!</p>';chatRendered[conteneurId]=0;return;}
-  const alreadyRendered=chatRendered[conteneurId]||0;
-  if(alreadyRendered===0){
-    // Premier rendu complet
-    fil.innerHTML=msgs.map(m=>msgHTML(m,vueDe)).join('');
-    fil.scrollTop=fil.scrollHeight;
-  } else if(msgs.length>alreadyRendered){
-    // Ajouter seulement les nouveaux messages sans effacer les anciens
-    const nouveaux=msgs.slice(alreadyRendered);
-    const atBottom=fil.scrollHeight-fil.scrollTop-fil.clientHeight<50;
-    nouveaux.forEach(m=>{
-      const div=document.createElement('div');
-      div.innerHTML=msgHTML(m,vueDe);
-      fil.appendChild(div.firstChild);
-    });
-    if(atBottom)fil.scrollTop=fil.scrollHeight;
+// État des chats rendus: { conteneurId: { hash, vueDe } }
+const chatState = {};
+
+function creerBulleMsg(m, vueDe){
+  const estMoi=m.de===vueDe, isAbsence=m.type==='absence';
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText=`display:flex;flex-direction:column;align-items:${estMoi?'flex-end':'flex-start'}`;
+  wrapper.innerHTML=`<div style="max-width:80%;padding:10px 14px;border-radius:${estMoi?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isAbsence?'var(--rose-light)':estMoi?'var(--brown)':'white'};color:${isAbsence?'#8A2A2A':estMoi?'white':'var(--text)'};font-size:13px;line-height:1.6;border:${isAbsence?'1.5px solid #D9A0A0':'none'};box-shadow:0 1px 4px var(--shadow)">${(m.texte||'').split('\n').join('<br>')}</div><div style="font-size:10px;color:var(--text-light);margin-top:3px;padding:0 4px">${m.heure||''}</div>`;
+  return wrapper;
+}
+
+function renderChatFil(conteneurId, chat, vueDe){
+  const fil = document.getElementById(conteneurId); if(!fil) return;
+  const msgs = chat.messages || [];
+  const hash = chatHash(msgs);
+  const state = chatState[conteneurId];
+
+  if(!state || state.vueDe !== vueDe){
+    // Premier rendu ou changement de vue - rendu complet
+    fil.innerHTML = '';
+    if(msgs.length === 0){
+      fil.innerHTML = '<p style="color:var(--text-light);font-size:13px;text-align:center;margin-top:40px">Commencez la conversation!</p>';
+    } else {
+      msgs.forEach(m => fil.appendChild(creerBulleMsg(m, vueDe)));
+    }
+    fil.scrollTop = fil.scrollHeight;
+    chatState[conteneurId] = { hash, vueDe, count: msgs.length };
+    return;
   }
-  chatRendered[conteneurId]=msgs.length;
+
+  if(hash === state.hash) return; // Rien de nouveau, on ne touche à rien
+
+  // Ajouter seulement les nouveaux messages
+  const ancienCount = state.count || 0;
+  if(msgs.length > ancienCount){
+    const atBottom = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 80;
+    msgs.slice(ancienCount).forEach(m => fil.appendChild(creerBulleMsg(m, vueDe)));
+    if(atBottom) fil.scrollTop = fil.scrollHeight;
+  }
+  chatState[conteneurId] = { hash, vueDe, count: msgs.length };
+}
+
+function resetChatFil(conteneurId){
+  delete chatState[conteneurId];
 }
 async function renderAnnonces(){const liste=document.getElementById('vpc-annonces-liste');if(!liste)return;const annonces=messagesEnvoyes.filter(m=>(m.dest||'').includes('Tous')).slice().reverse();const sub=document.getElementById('vpc-annonces-subtitle');if(sub)sub.textContent=annonces.length+' annonce'+(annonces.length>1?'s':'');liste.innerHTML=annonces.length===0?'<p style="font-size:13px;color:var(--text-light);padding:8px 0">Aucune annonce.</p>':annonces.map(m=>`<div style="padding:12px;background:var(--warm);border-radius:10px;margin-bottom:8px;border-left:3px solid var(--terracotta)"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-size:13px;font-weight:600">${m.sujet||''}</div><div style="font-size:10px;color:var(--text-light)">${m.heure||''}</div></div><div style="font-size:13px;color:var(--text);line-height:1.6">${m.texte||''}</div></div>`).join('');}
 let annoncesOuvert=true;
@@ -824,33 +825,18 @@ async function ouvrirVueParentConnecte(compte,enfantIdActif){
   document.getElementById('vpc-enfant-info').textContent=enfant?calculerAge(enfant.ddn)+(enfant.groupe?' · '+enfant.groupe.split(' ')[0]:'')+(enfant.allergie?' · ⚠️ '+enfant.allergie:''):'';
   const sw=document.getElementById('vpc-enfant-switcher');sw.innerHTML=mesEnfants.length>1?`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${mesEnfants.map(e=>`<button onclick="vpcSwitchEnfant('${e.id}')" style="padding:5px 12px;border-radius:10px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;border:1.5px solid var(--peach);background:${String(e.id)===String(vpcEnfantId)?'var(--brown)':'white'};color:${String(e.id)===String(vpcEnfantId)?'white':'var(--text)'}">${e.prenom}</button>`).join('')}</div>`:'';
   renderVPCFactures();renderVPCAgenda();renderVPCMenu();
-  let lastChatCount_parent = (chats[String(compte.id)]?.messages||[]).length;
   startPolling('parent_poll',async()=>{
     [photosGalerie,messagesEnvoyes,factures]=await Promise.all([apiGet('photos'),apiGet('messagesEnvoyes'),apiGet('factures')]);
     const freshChat=await apiGetChat(String(compte.id));
     if(freshChat){
       const newCount=(freshChat.messages||[]).length;
-      const changed=newCount!==lastChatCount_parent;
+      const prevHashP=chatState['vpc-chat-fil']?.hash||''; const curHashP=String(newCount)+'|'+((freshChat.messages||[]).slice(-1)[0]?.heure||''); const changed=curHashP!==prevHashP;
       if(changed){
-        lastChatCount_parent=newCount;
         chats[String(compte.id)]=freshChat;
-        // Ajouter silencieusement les nouveaux messages
-        const fil=document.getElementById('vpc-chat-fil');
+        // Mettre à jour le chat silencieusement
         const tabMsg=document.getElementById('vpc-tab-messages');
         const msgVisible=tabMsg&&tabMsg.style.display!=='none';
-        if(fil&&msgVisible){
-          const msgs=freshChat.messages||[];
-          const rendered=chatRendered['vpc-chat-fil']||0;
-          if(msgs.length>rendered){
-            msgs.slice(rendered).forEach(m=>{
-              const wrapper=document.createElement('div');
-              wrapper.innerHTML=msgHTML(m,'parent');
-              fil.appendChild(wrapper.firstChild);
-            });
-            chatRendered['vpc-chat-fil']=msgs.length;
-            fil.scrollTop=fil.scrollHeight;
-          }
-        }
+        if(msgVisible) renderChatFil('vpc-chat-fil',freshChat,'parent');
       }
       const tabActif=document.querySelector('.active-vpc-tab');
       if(tabActif){const onclick=tabActif.getAttribute('onclick')||'';
@@ -867,8 +853,7 @@ function showVPCtab(tabId,btn){
   document.querySelectorAll('.vpc-tab-btn').forEach(b=>b.classList.remove('active-vpc-tab'));
   if(btn)btn.classList.add('active-vpc-tab');
   if(tabId==='vpc-tab-messages'){
-    // Reset complet seulement quand on clique sur l'onglet
-    chatRendered['vpc-chat-fil']=0;
+    resetChatFil('vpc-chat-fil');
     renderChatParent();
   }
   if(tabId==='vpc-tab-agenda')renderVPCAgenda();
