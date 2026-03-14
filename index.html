@@ -743,15 +743,25 @@ async function envoyerMessageGroupe(){const dest=document.getElementById('msg-de
 // ==================== CHAT ====================
 async function getChatParent(parentId){const sid=String(parentId);if(!chats[sid]){const data=await apiGetChat(sid);chats[sid]=data||{parentId:sid,messages:[]};}return chats[sid];}
 async function saveChatParent(parentId){await apiSetChat(parentId,chats[String(parentId)]);}
-function renderConversationsListe(){
+let convListeHash = '';
+function renderConversationsListe(force){
   const cont=document.getElementById('chat-conversations-liste');if(!cont)return;
+  // Hash basé sur: parents, chats non-lus, conversation active
+  const h = compteParents.map(p=>{
+    const c=chats[String(p.id)]; 
+    const nl=c?(c.messages||[]).filter(m=>m.de==='parent'&&!m.lu).length:0;
+    const last=(c?.messages||[]).slice(-1)[0]?.heure||'';
+    return p.id+'|'+nl+'|'+last;
+  }).join(',')+chatRespActifId;
+  if(!force && h===convListeHash) return; // Rien de changé
+  convListeHash = h;
   if(compteParents.length===0){cont.innerHTML='<p style="font-size:12px;color:var(--text-light);padding:8px">Aucun parent.</p>';return;}
   cont.innerHTML=compteParents.map(p=>{const chat=chats[String(p.id)];const nonLus=chat?(chat.messages||[]).filter(m=>m.de==='parent'&&!m.lu).length:0;const dernier=chat&&(chat.messages||[]).length>0?chat.messages[chat.messages.length-1]:null;const mesEnfants=(p.enfantIds||[]).map(id=>enfants.find(e=>String(e.id)===String(id))).filter(Boolean);const isActif=String(p.id)===String(chatRespActifId);return`<div onclick="ouvrirChatResp('${p.id}')" style="padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:${isActif?'var(--peach)':'transparent'};border:1.5px solid ${isActif?'var(--terracotta)':'transparent'}"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:600">${p.nom}</div>${nonLus>0?`<span style="background:var(--terracotta);color:white;border-radius:10px;font-size:10px;font-weight:700;padding:1px 7px">${nonLus}</span>`:''}</div><div style="font-size:11px;color:var(--text-light);margin-top:2px">${mesEnfants.map(e=>e.prenom).join(', ')}</div>${dernier?`<div style="font-size:11px;color:var(--text-light);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px">${dernier.de==='responsable'?'Vous: ':''}${(dernier.texte||'').substring(0,50)}</div>`:'<div style="font-size:11px;color:var(--text-light);margin-top:3px">Aucun message</div>'}</div>`;}).join('');
 }
 async function ouvrirChatResp(parentId){
   chatRespActifId=String(parentId);const p=compteParents.find(x=>String(x.id)===String(parentId));
   const chat=await getChatParent(parentId);(chat.messages||[]).forEach(m=>{if(m.de==='parent')m.lu=true;});await saveChatParent(parentId);
-  renderConversationsListe();
+  renderConversationsListe(true);
   const mesEnfants=(p.enfantIds||[]).map(id=>enfants.find(e=>String(e.id)===String(id))).filter(Boolean);
   const h=document.getElementById('chat-header-actif');if(h)h.innerHTML=`<div><div class="card-title">${p.nom}</div><div class="card-subtitle">${mesEnfants.map(e=>e.prenom+' '+e.nom).join(' · ')}</div></div>`;
   resetChatFil('chat-fil-resp');
@@ -781,6 +791,7 @@ async function envoyerChatResp(){
   await saveChatParent(chatRespActifId);
   input.value='';input.style.height='auto';
   renderChatFil('chat-fil-resp',chat,'responsable');
+  convListeHash='';
   renderConversationsListe();
 }
 async function renderChatParent(){const compte=compteParents.find(p=>String(p.id)===String(sessionActuelle?.parentId));if(!compte)return;const fresh=await apiGetChat(String(compte.id));if(fresh)chats[String(compte.id)]=fresh;const chat=chats[String(compte.id)]||{messages:[]};(chat.messages||[]).forEach(m=>{if(m.de==='responsable')m.lu=true;});await saveChatParent(compte.id);renderChatFil('vpc-chat-fil',chat,'parent');renderAnnonces();}
