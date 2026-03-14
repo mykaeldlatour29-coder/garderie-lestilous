@@ -461,33 +461,51 @@ async function chargerDonnees() {
   ]);
 }
 
+function hashLeger(liste){
+  // Hash rapide sans les photos base64
+  return (liste||[]).map(x=>x.id+'|'+(x.statut||'')+'|'+(x.prenom||x.titre||x.desc||'')).join(',');
+}
+
 function demarrerPollingResponsable() {
-  // Snapshots pour détecter les vrais changements
-  let snapEnfants=JSON.stringify(enfants);
-  let snapFactures=JSON.stringify(factures);
-  let snapAbsences=JSON.stringify(absences);
+  let snapEnfants=hashLeger(enfants);
+  let snapFactures=hashLeger(factures);
+  let snapAbsences=hashLeger(absences);
+  let snapEvenements=hashLeger(evenements);
 
   startPolling('resp_main', async()=>{
     const [newEnfants,newParents,newFactures,newEvenements,newAbsences] = await Promise.all([
       apiGet('enfants'),apiGet('parents'),apiGet('factures'),apiGet('evenements'),apiGet('absences')
     ]);
-    const enfantsChanged = JSON.stringify(newEnfants)!==snapEnfants;
-    const facturesChanged = JSON.stringify(newFactures)!==snapFactures;
-    const absencesChanged = JSON.stringify(newAbsences)!==snapAbsences;
 
-    enfants=newEnfants; compteParents=newParents; factures=newFactures; evenements=newEvenements; absences=newAbsences;
+    const enfantsChanged   = hashLeger(newEnfants)   !== snapEnfants;
+    const facturesChanged  = hashLeger(newFactures)  !== snapFactures;
+    const absencesChanged  = hashLeger(newAbsences)  !== snapAbsences;
+    const evenementsChanged= hashLeger(newEvenements)!== snapEvenements;
 
-    // Ne re-rendre que si données ont changé
-    if(enfantsChanged||absencesChanged){
-      snapEnfants=JSON.stringify(enfants);
-      snapAbsences=JSON.stringify(absences);
-      renderDashboard();
+    // Mettre à jour les données
+    enfants=newEnfants; compteParents=newParents;
+    factures=newFactures; evenements=newEvenements; absences=newAbsences;
+
+    // Mettre à jour les snaps
+    if(enfantsChanged)   snapEnfants   = hashLeger(enfants);
+    if(facturesChanged)  snapFactures  = hashLeger(factures);
+    if(absencesChanged)  snapAbsences  = hashLeger(absences);
+    if(evenementsChanged)snapEvenements= hashLeger(evenements);
+
+    // Re-rendre SEULEMENT si changement réel
+    if(absencesChanged) renderDashboardAbsences();
+    if(enfantsChanged){
+      // Mettre à jour stats dashboard sans re-rendre toute la liste
+      const bE=document.getElementById('nav-badge-enfants');if(bE)bE.textContent=enfants.length;
+      const el=document.getElementById('dashboard-date');
+      if(el)el.textContent=el.textContent.replace(/\d+ enfants inscrits/,enfants.length+' enfants inscrits');
+      if(document.getElementById('page-enfants').classList.contains('active')) renderEnfants();
     }
-    if(enfantsChanged && document.getElementById('page-enfants').classList.contains('active')) renderEnfants();
     if(facturesChanged){
-      snapFactures=JSON.stringify(factures);
+      const sF=document.getElementById('stat-factures');if(sF)sF.textContent=factures.filter(f=>f.statut!=='payee').length;
       if(document.getElementById('page-factures').classList.contains('active')) renderFactures(filtreActuel);
     }
+    if(evenementsChanged && document.getElementById('page-agenda').classList.contains('active')) renderCalendrier();
   }, 8000);
 }
 
@@ -825,24 +843,43 @@ async function ouvrirVueParentConnecte(compte,enfantIdActif){
   document.getElementById('vpc-enfant-info').textContent=enfant?calculerAge(enfant.ddn)+(enfant.groupe?' · '+enfant.groupe.split(' ')[0]:'')+(enfant.allergie?' · ⚠️ '+enfant.allergie:''):'';
   const sw=document.getElementById('vpc-enfant-switcher');sw.innerHTML=mesEnfants.length>1?`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${mesEnfants.map(e=>`<button onclick="vpcSwitchEnfant('${e.id}')" style="padding:5px 12px;border-radius:10px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;border:1.5px solid var(--peach);background:${String(e.id)===String(vpcEnfantId)?'var(--brown)':'white'};color:${String(e.id)===String(vpcEnfantId)?'white':'var(--text)'}">${e.prenom}</button>`).join('')}</div>`:'';
   renderVPCFactures();renderVPCAgenda();renderVPCMenu();
+  // Snaps pour éviter les re-rendus inutiles côté parent
+  let snapPhotos = hashLeger(photosGalerie);
+  let snapFacturesP = hashLeger(factures);
+  let snapMessages = hashLeger(messagesEnvoyes);
+
   startPolling('parent_poll',async()=>{
-    [photosGalerie,messagesEnvoyes,factures]=await Promise.all([apiGet('photos'),apiGet('messagesEnvoyes'),apiGet('factures')]);
-    const freshChat=await apiGetChat(String(compte.id));
+    const [newPhotos, newMessages, newFactures, freshChat] = await Promise.all([
+      apiGet('photos'), apiGet('messagesEnvoyes'), apiGet('factures'),
+      apiGetChat(String(compte.id))
+    ]);
+
+    const photosChanged   = hashLeger(newPhotos)   !== snapPhotos;
+    const facturesChanged = hashLeger(newFactures)  !== snapFacturesP;
+    const messagesChanged = hashLeger(newMessages)  !== snapMessages;
+
+    if(photosChanged)   { photosGalerie=newPhotos;     snapPhotos=hashLeger(newPhotos); }
+    if(facturesChanged) { factures=newFactures;         snapFacturesP=hashLeger(newFactures); }
+    if(messagesChanged) { messagesEnvoyes=newMessages;  snapMessages=hashLeger(newMessages); }
+
+    // Chat - utiliser le système hash existant
     if(freshChat){
-      const newCount=(freshChat.messages||[]).length;
-      const prevHashP=chatState['vpc-chat-fil']?.hash||''; const curHashP=String(newCount)+'|'+((freshChat.messages||[]).slice(-1)[0]?.heure||''); const changed=curHashP!==prevHashP;
-      if(changed){
+      const curHash = String((freshChat.messages||[]).length)+'|'+((freshChat.messages||[]).slice(-1)[0]?.heure||'');
+      const prevHash = chatState['vpc-chat-fil']?.hash||'';
+      if(curHash !== prevHash){
         chats[String(compte.id)]=freshChat;
-        // Mettre à jour le chat silencieusement
         const tabMsg=document.getElementById('vpc-tab-messages');
-        const msgVisible=tabMsg&&tabMsg.style.display!=='none';
-        if(msgVisible) renderChatFil('vpc-chat-fil',freshChat,'parent');
+        if(tabMsg&&tabMsg.style.display!=='none') renderChatFil('vpc-chat-fil',freshChat,'parent');
       }
-      const tabActif=document.querySelector('.active-vpc-tab');
-      if(tabActif){const onclick=tabActif.getAttribute('onclick')||'';
-        if(onclick.includes('photos'))renderVPCPhotos();
-        if(onclick.includes('factures'))renderVPCFactures();
-      }
+    }
+
+    // Re-rendre seulement l'onglet actif et seulement si changement
+    const tabActif=document.querySelector('.active-vpc-tab');
+    if(tabActif){
+      const onclick=tabActif.getAttribute('onclick')||'';
+      if(onclick.includes('photos')   && photosChanged)   renderVPCPhotos();
+      if(onclick.includes('factures') && facturesChanged) renderVPCFactures();
+      if(onclick.includes('messages') && messagesChanged) renderAnnonces();
     }
   },5000);
 }
